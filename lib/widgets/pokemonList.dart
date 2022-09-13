@@ -8,6 +8,7 @@ import '../services/webservice.dart';
 
 class PokemonListState extends State<PokemonListWidget> {
   PokemonList _pokemonList = PokemonList();
+  final loading = ValueNotifier(true);
   late ScrollController _controller = ScrollController();
 
   @override
@@ -20,18 +21,24 @@ class PokemonListState extends State<PokemonListWidget> {
   @override
   void dispose() {
     _controller.removeListener(_scrollListener);
-
     super.dispose();
   }
 
   void _populatePokemonList(url) {
+    loading.value = true;
     Webservice().load(PokemonList.all(url)).then((pokemonList) => {
           setState(() => {_pokemonList = pokemonList})
         });
+    loading.value = false;
   }
 
-  ListTile _buildItemsForListView(BuildContext context, int index) {
-    return ListTile(title: Text(_pokemonList.list[index].name));
+  Container _buildItemsForListView(BuildContext context, int index) {
+    return Container(
+      color: Colors.blueGrey[100],
+      child: Padding(
+          padding: EdgeInsets.all(5),
+          child: ListTile(title: Text(_pokemonList.list[index].name))),
+    );
   }
 
   @override
@@ -40,19 +47,44 @@ class PokemonListState extends State<PokemonListWidget> {
         appBar: AppBar(
           title: Text('Pokemon'),
         ),
-        body: _pokemonList.list == null
-            ? CircularProgressIndicator()
-            : ListView.builder(
-                itemCount: _pokemonList.list.length,
-                controller: _controller,
-                itemBuilder: _buildItemsForListView,
-              ));
+        body: Stack(
+          children: [
+            ValueListenableBuilder(
+                valueListenable: ValueNotifier(_pokemonList.list != null),
+                builder: (context, bool isLoading, _) {
+                  return (isLoading)
+                      ? ListView.builder(
+                          itemCount: _pokemonList.list.length,
+                          controller: _controller,
+                          itemBuilder: _buildItemsForListView,
+                        )
+                      : const Center(
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                          ),
+                        );
+                }),
+            ValueListenableBuilder(
+              valueListenable: loading,
+              builder: (context, bool isLoading, _) {
+                return (isLoading)
+                    ? const Center(
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                        ),
+                      )
+                    : Container();
+              },
+            )
+          ],
+        ));
   }
 
   void _scrollListener() {
-    log(' current pos: ${_controller.position.extentAfter}');
+    log(' current pos: ${_controller.position.maxScrollExtent}');
     log('list size: ${_pokemonList.list.length}');
-    if (_controller.position.extentAfter < 40) {
+    if (_controller.position.extentAfter < 200 && !loading.value) {
+      loading.value = true;
       Webservice()
           .load(PokemonList.all(_pokemonList.next))
           .then((pokemonList) => {
@@ -62,6 +94,7 @@ class PokemonListState extends State<PokemonListWidget> {
                       _pokemonList.list = _pokemonList.list + pokemonList.list
                     })
               });
+      loading.value = false;
     }
   }
 }
